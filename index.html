@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DOOH Gamificado - P2P</title>
-    <!-- Importamos PeerJS para conexión directa sin backend -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -60,7 +59,6 @@
             <h1>Reto Mundial</h1>
             <p>Escanea y presiona SALTAR en tu móvil</p>
             <div class="qr-box">
-                <!-- El QR cargará un loader hasta que PeerJS genere el ID -->
                 <img id="qr-img" src="https://via.placeholder.com/150?text=Cargando+QR..." alt="QR Control">
             </div>
             <div id="status">Generando sala...</div>
@@ -104,13 +102,16 @@
             drawPlayer();
             requestAnimationFrame(gameLoop);
         }
-        gameLoop(); // Iniciar motor gráfico
+        gameLoop();
 
         // ==========================================
-        // 2. LÓGICA DE RED (PEERJS - P2P) CON STUN SERVERS
+        // 2. LÓGICA DE RED (PEERJS) CON ID FIJO Y RECONEXIÓN
         // ==========================================
-        // Usamos servidores de Google para evitar bloqueos de red (Firewalls/NAT)
-        const peer = new Peer({
+        const FIXED_ROOM_ID = 'gpovallas-dooh-01'; // ID Estático para asegurar la persistencia
+        const statusText = document.getElementById('status');
+        const qrImg = document.getElementById('qr-img');
+
+        const peer = new Peer(FIXED_ROOM_ID, {
             config: {
                 'iceServers': [
                     { urls: 'stun:stun.l.google.com:19302' },
@@ -119,34 +120,32 @@
             }
         }); 
 
-        const statusText = document.getElementById('status');
-        const qrImg = document.getElementById('qr-img');
+        // Generar QR de inmediato basado en el ID estático
+        let currentUrl = window.location.href.split('?')[0]; 
+        currentUrl = currentUrl.replace('index.html', ''); 
+        if (!currentUrl.endsWith('/')) currentUrl += '/';
+        const controlUrl = `${currentUrl}control.html?room=${FIXED_ROOM_ID}`;
+        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(controlUrl)}`;
 
-        // Cuando la pantalla obtiene su ID único
         peer.on('open', (id) => {
-            console.log('ID de la Pantalla: ' + id);
-            
-            // Construimos la URL dinámica para el control.html
-            let currentUrl = window.location.href.split('?')[0]; 
-            currentUrl = currentUrl.replace('index.html', ''); // Limpiamos si termina en index.html
-            if (!currentUrl.endsWith('/')) currentUrl += '/';
-            
-            const controlUrl = `${currentUrl}control.html?room=${id}`;
-            console.log("URL del QR:", controlUrl);
-            
-            // Generamos el QR apuntando a esa URL
-            qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(controlUrl)}`;
+            console.log('Pantalla lista con ID: ' + id);
             statusText.innerText = "Esperando jugador...";
+            statusText.style.color = "#ffeb3b";
         });
 
-        // Cuando un celular se conecta
+        // MECANISMO DE AUTO-RECONEXIÓN SI OCURRE UN ERR_CONNECTION_CLOSED
+        peer.on('disconnected', () => {
+            console.log('Se perdió conexión con el servidor (ERR_CONNECTION_CLOSED). Reconectando...');
+            statusText.innerText = "Restaurando conexión...";
+            peer.reconnect();
+        });
+
         peer.on('connection', (conn) => {
             conn.on('open', () => {
                 statusText.innerText = "¡Jugador conectado!";
                 statusText.style.color = "#00e676";
             });
 
-            // Cuando recibimos un mensaje del celular
             conn.on('data', (data) => {
                 if (data === 'jump') {
                     jump();
@@ -159,11 +158,15 @@
             });
         });
 
-        // Manejo de errores para diagnosticar problemas de red
         peer.on('error', (err) => {
             console.error("Error en PeerJS:", err);
-            statusText.innerText = "Error: " + err.type;
-            statusText.style.color = "red";
+            // Si el ID ya está en uso (recargaste rápido), intenta reconectar
+            if(err.type === 'unavailable-id') {
+                peer.reconnect();
+            } else {
+                statusText.innerText = "Error: " + err.type;
+                statusText.style.color = "red";
+            }
         });
     </script>
 </body>
