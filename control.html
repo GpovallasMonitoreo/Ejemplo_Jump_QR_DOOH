@@ -9,25 +9,23 @@
         body {
             margin: 0; display: flex; flex-direction: column; justify-content: center; align-items: center;
             height: 100vh; background-color: #121212; font-family: Arial, sans-serif;
-            overflow: hidden; touch-action: manipulation; /* Evita zoom al hacer tap rápido */
+            overflow: hidden; touch-action: manipulation;
         }
         #status { color: white; margin-bottom: 20px; font-size: 18px; text-align: center; padding: 0 20px;}
         
         #jumpBtn {
             width: 250px; height: 250px; border-radius: 50%;
-            background-color: #555; /* Inicia apagado */
+            background-color: #555; 
             color: rgba(0,0,0,0.5); font-size: 36px; font-weight: bold;
             border: 8px solid #333; transition: all 0.2s ease; outline: none;
             text-transform: uppercase;
         }
         
-        /* Clase cuando está conectado y activo */
         #jumpBtn.active {
             background-color: #ffeb3b; color: #000;
             border-color: #fbc02d; box-shadow: 0 15px 25px rgba(0,0,0,0.5);
         }
         
-        /* Efecto al presionar el botón */
         #jumpBtn.active:active {
             transform: scale(0.95); background-color: #fdd835; box-shadow: 0 5px 10px rgba(0,0,0,0.5);
         }
@@ -39,7 +37,6 @@
     <button id="jumpBtn" disabled>Saltar</button>
 
     <script>
-        // 1. Extraer el ID de la sala desde la URL (lo escaneó del QR)
         const urlParams = new URLSearchParams(window.location.search);
         const roomId = urlParams.get('room');
 
@@ -49,7 +46,6 @@
         if (!roomId) {
             statusText.innerText = "Error: Escanea el QR de la pantalla principal.";
         } else {
-            // 2. Iniciar conexión PeerJS (Con STUN Servers para atravesar red móvil/wifi)
             const peer = new Peer({
                 config: {
                     'iceServers': [
@@ -62,8 +58,10 @@
 
             peer.on('open', () => {
                 statusText.innerText = "Conectando al servidor...";
-                // Nos conectamos al ID de la pantalla
-                conn = peer.connect(roomId);
+                // Intentamos conectar al ID fijo de la pantalla
+                conn = peer.connect(roomId, {
+                    reliable: true // Aseguramos que los mensajes lleguen
+                });
 
                 conn.on('open', () => {
                     statusText.innerText = "¡Conectado! Presiona para jugar.";
@@ -80,24 +78,24 @@
                 });
             });
 
-            // Si hay un error de red, lo mostramos claramente
             peer.on('error', (err) => {
                 console.error(err);
-                statusText.innerText = "Fallo de red: " + err.type;
+                if(err.type === 'peer-unavailable') {
+                    statusText.innerText = "La pantalla se desconectó. Intenta recargar la pantalla base y escanea de nuevo.";
+                } else {
+                    statusText.innerText = "Fallo de red: " + err.type;
+                }
                 statusText.style.color = "red";
             });
 
-            // 3. Enviar la señal al tocar el botón
-            // Usamos 'touchstart' para que la respuesta en celular sea inmediata (0 latencia de UI)
             jumpBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault(); // Evita comportamientos raros en el navegador móvil
+                e.preventDefault(); 
                 if (conn && conn.open) {
                     conn.send('jump');
-                    if (navigator.vibrate) navigator.vibrate(50); // Hace vibrar el celular
+                    if (navigator.vibrate) navigator.vibrate(50); 
                 }
             });
 
-            // Fallback para clicks con el mouse si lo pruebas desde otra PC
             jumpBtn.addEventListener('mousedown', (e) => {
                 if (conn && conn.open) conn.send('jump');
             });
