@@ -11,7 +11,8 @@
             height: 100vh; background-color: #121212; font-family: Arial, sans-serif;
             overflow: hidden; touch-action: manipulation; /* Evita zoom al hacer tap rápido */
         }
-        #status { color: white; margin-bottom: 20px; font-size: 18px; }
+        #status { color: white; margin-bottom: 20px; font-size: 18px; text-align: center; padding: 0 20px;}
+        
         #jumpBtn {
             width: 250px; height: 250px; border-radius: 50%;
             background-color: #555; /* Inicia apagado */
@@ -19,11 +20,14 @@
             border: 8px solid #333; transition: all 0.2s ease; outline: none;
             text-transform: uppercase;
         }
-        /* Clase cuando está conectado */
+        
+        /* Clase cuando está conectado y activo */
         #jumpBtn.active {
             background-color: #ffeb3b; color: #000;
             border-color: #fbc02d; box-shadow: 0 15px 25px rgba(0,0,0,0.5);
         }
+        
+        /* Efecto al presionar el botón */
         #jumpBtn.active:active {
             transform: scale(0.95); background-color: #fdd835; box-shadow: 0 5px 10px rgba(0,0,0,0.5);
         }
@@ -43,13 +47,21 @@
         const jumpBtn = document.getElementById('jumpBtn');
 
         if (!roomId) {
-            statusText.innerText = "Error: Escanea el QR de la pantalla.";
+            statusText.innerText = "Error: Escanea el QR de la pantalla principal.";
         } else {
-            // 2. Iniciar conexión PeerJS
-            const peer = new Peer();
+            // 2. Iniciar conexión PeerJS (Con STUN Servers para atravesar red móvil/wifi)
+            const peer = new Peer({
+                config: {
+                    'iceServers': [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
             let conn;
 
             peer.on('open', () => {
+                statusText.innerText = "Conectando al servidor...";
                 // Nos conectamos al ID de la pantalla
                 conn = peer.connect(roomId);
 
@@ -61,24 +73,31 @@
                 });
 
                 conn.on('close', () => {
-                    statusText.innerText = "Conexión perdida.";
+                    statusText.innerText = "Conexión perdida con la pantalla.";
                     statusText.style.color = "red";
                     jumpBtn.classList.remove('active');
                     jumpBtn.disabled = true;
                 });
             });
 
+            // Si hay un error de red, lo mostramos claramente
+            peer.on('error', (err) => {
+                console.error(err);
+                statusText.innerText = "Fallo de red: " + err.type;
+                statusText.style.color = "red";
+            });
+
             // 3. Enviar la señal al tocar el botón
-            // Usamos 'touchstart' para que la respuesta en móvil sea inmediata
+            // Usamos 'touchstart' para que la respuesta en celular sea inmediata (0 latencia de UI)
             jumpBtn.addEventListener('touchstart', (e) => {
                 e.preventDefault(); // Evita comportamientos raros en el navegador móvil
                 if (conn && conn.open) {
                     conn.send('jump');
-                    if (navigator.vibrate) navigator.vibrate(50); // Hace vibrar el cel
+                    if (navigator.vibrate) navigator.vibrate(50); // Hace vibrar el celular
                 }
             });
 
-            // Fallback para clicks en PC si estás probando
+            // Fallback para clicks con el mouse si lo pruebas desde otra PC
             jumpBtn.addEventListener('mousedown', (e) => {
                 if (conn && conn.open) conn.send('jump');
             });
