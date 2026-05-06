@@ -37,7 +37,7 @@
         .qr-box { width: 160px; height: 160px; background: white; padding: 10px; border-radius: 15px; }
         .qr-box img { width: 100%; height: 100%; object-fit: contain; }
         
-        #status { margin-top: 15px; font-size: 12px; font-weight: bold; color: #ffeb3b; }
+        #status { margin-top: 15px; font-size: 12px; font-weight: bold; color: #ffeb3b; text-align: center; max-width: 90%; word-wrap: break-word;}
 
         .game-section {
             flex-grow: 1;
@@ -74,7 +74,7 @@
 
     <script>
         // ==========================================
-        // LÓGICA DEL JUEGO BÁSICO (CANVAS)
+        // 1. LÓGICA DEL JUEGO BÁSICO (CANVAS)
         // ==========================================
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -104,12 +104,21 @@
             drawPlayer();
             requestAnimationFrame(gameLoop);
         }
-        gameLoop(); 
+        gameLoop(); // Iniciar motor gráfico
 
         // ==========================================
-        // LÓGICA DE RED (PEERJS - P2P)
+        // 2. LÓGICA DE RED (PEERJS - P2P) CON STUN SERVERS
         // ==========================================
-        const peer = new Peer(); 
+        // Usamos servidores de Google para evitar bloqueos de red (Firewalls/NAT)
+        const peer = new Peer({
+            config: {
+                'iceServers': [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            }
+        }); 
+
         const statusText = document.getElementById('status');
         const qrImg = document.getElementById('qr-img');
 
@@ -123,6 +132,7 @@
             if (!currentUrl.endsWith('/')) currentUrl += '/';
             
             const controlUrl = `${currentUrl}control.html?room=${id}`;
+            console.log("URL del QR:", controlUrl);
             
             // Generamos el QR apuntando a esa URL
             qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(controlUrl)}`;
@@ -147,6 +157,13 @@
                 statusText.innerText = "Jugador desconectado";
                 statusText.style.color = "#ffeb3b";
             });
+        });
+
+        // Manejo de errores para diagnosticar problemas de red
+        peer.on('error', (err) => {
+            console.error("Error en PeerJS:", err);
+            statusText.innerText = "Error: " + err.type;
+            statusText.style.color = "red";
         });
     </script>
 </body>
