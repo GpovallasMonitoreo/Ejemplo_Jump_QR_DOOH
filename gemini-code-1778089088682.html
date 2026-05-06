@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOOH Gamificado - P2P</title>
+    <!-- Importamos PeerJS para conexión directa sin backend -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        .dooh-container {
+            width: 1440px;
+            height: 405px;
+            display: flex;
+            background-color: #0b192c;
+            font-family: 'Segoe UI', sans-serif;
+            overflow: hidden;
+            color: white;
+        }
+
+        .qr-section {
+            width: 350px;
+            background: linear-gradient(135deg, #004d40, #009688);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            text-align: center;
+            border-right: 4px solid #fff;
+            z-index: 10;
+        }
+
+        .qr-section h1 { font-size: 28px; margin-bottom: 10px; text-transform: uppercase; }
+        .qr-section p { font-size: 14px; margin-bottom: 20px; color: #e0f2f1; }
+        .qr-box { width: 160px; height: 160px; background: white; padding: 10px; border-radius: 15px; }
+        .qr-box img { width: 100%; height: 100%; object-fit: contain; }
+        
+        #status { margin-top: 15px; font-size: 12px; font-weight: bold; color: #ffeb3b; }
+
+        .game-section {
+            flex-grow: 1;
+            position: relative;
+            background: url('https://images.unsplash.com/photo-1518605368461-1e12522703a9?auto=format&fit=crop&w=1200&q=80') center/cover;
+        }
+
+        .game-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; }
+    </style>
+</head>
+<body>
+
+    <div class="dooh-container">
+        <div class="qr-section">
+            <h1>Reto Mundial</h1>
+            <p>Escanea y presiona SALTAR en tu móvil</p>
+            <div class="qr-box">
+                <!-- El QR cargará un loader hasta que PeerJS genere el ID -->
+                <img id="qr-img" src="https://via.placeholder.com/150?text=Cargando+QR..." alt="QR Control">
+            </div>
+            <div id="status">Generando sala...</div>
+        </div>
+
+        <div class="game-section">
+            <div class="game-overlay"></div>
+            <canvas id="gameCanvas" width="1090" height="405"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // LÓGICA DEL JUEGO BÁSICO (CANVAS)
+        // ==========================================
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let player = { x: 100, y: 300, width: 40, height: 40, velocityY: 0, isJumping: false };
+        const gravity = 1.5;
+
+        function drawPlayer() {
+            ctx.fillStyle = '#ffeb3b';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#ffeb3b';
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            ctx.shadowBlur = 0; 
+        }
+
+        function jump() {
+            if (!player.isJumping) {
+                player.velocityY = -20; 
+                player.isJumping = true;
+            }
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            player.y += player.velocityY;
+            if (player.y < 300) { player.velocityY += gravity; } 
+            else { player.y = 300; player.isJumping = false; player.velocityY = 0; }
+            drawPlayer();
+            requestAnimationFrame(gameLoop);
+        }
+        gameLoop(); 
+
+        // ==========================================
+        // LÓGICA DE RED (PEERJS - P2P)
+        // ==========================================
+        const peer = new Peer(); 
+        const statusText = document.getElementById('status');
+        const qrImg = document.getElementById('qr-img');
+
+        // Cuando la pantalla obtiene su ID único
+        peer.on('open', (id) => {
+            console.log('ID de la Pantalla: ' + id);
+            
+            // Construimos la URL dinámica para el control.html
+            let currentUrl = window.location.href.split('?')[0]; 
+            currentUrl = currentUrl.replace('index.html', ''); // Limpiamos si termina en index.html
+            if (!currentUrl.endsWith('/')) currentUrl += '/';
+            
+            const controlUrl = `${currentUrl}control.html?room=${id}`;
+            
+            // Generamos el QR apuntando a esa URL
+            qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(controlUrl)}`;
+            statusText.innerText = "Esperando jugador...";
+        });
+
+        // Cuando un celular se conecta
+        peer.on('connection', (conn) => {
+            conn.on('open', () => {
+                statusText.innerText = "¡Jugador conectado!";
+                statusText.style.color = "#00e676";
+            });
+
+            // Cuando recibimos un mensaje del celular
+            conn.on('data', (data) => {
+                if (data === 'jump') {
+                    jump();
+                }
+            });
+
+            conn.on('close', () => {
+                statusText.innerText = "Jugador desconectado";
+                statusText.style.color = "#ffeb3b";
+            });
+        });
+    </script>
+</body>
+</html>

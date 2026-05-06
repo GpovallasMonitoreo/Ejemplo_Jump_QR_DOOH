@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Control DOOH</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body {
+            margin: 0; display: flex; flex-direction: column; justify-content: center; align-items: center;
+            height: 100vh; background-color: #121212; font-family: Arial, sans-serif;
+            overflow: hidden; touch-action: manipulation; /* Evita zoom al hacer tap rápido */
+        }
+        #status { color: white; margin-bottom: 20px; font-size: 18px; }
+        #jumpBtn {
+            width: 250px; height: 250px; border-radius: 50%;
+            background-color: #555; /* Inicia apagado */
+            color: rgba(0,0,0,0.5); font-size: 36px; font-weight: bold;
+            border: 8px solid #333; transition: all 0.2s ease; outline: none;
+            text-transform: uppercase;
+        }
+        /* Clase cuando está conectado */
+        #jumpBtn.active {
+            background-color: #ffeb3b; color: #000;
+            border-color: #fbc02d; box-shadow: 0 15px 25px rgba(0,0,0,0.5);
+        }
+        #jumpBtn.active:active {
+            transform: scale(0.95); background-color: #fdd835; box-shadow: 0 5px 10px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="status">Conectando a la pantalla...</div>
+    <button id="jumpBtn" disabled>Saltar</button>
+
+    <script>
+        // 1. Extraer el ID de la sala desde la URL (lo escaneó del QR)
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomId = urlParams.get('room');
+
+        const statusText = document.getElementById('status');
+        const jumpBtn = document.getElementById('jumpBtn');
+
+        if (!roomId) {
+            statusText.innerText = "Error: Escanea el QR de la pantalla.";
+        } else {
+            // 2. Iniciar conexión PeerJS
+            const peer = new Peer();
+            let conn;
+
+            peer.on('open', () => {
+                // Nos conectamos al ID de la pantalla
+                conn = peer.connect(roomId);
+
+                conn.on('open', () => {
+                    statusText.innerText = "¡Conectado! Presiona para jugar.";
+                    statusText.style.color = "#00e676";
+                    jumpBtn.classList.add('active');
+                    jumpBtn.disabled = false;
+                });
+
+                conn.on('close', () => {
+                    statusText.innerText = "Conexión perdida.";
+                    statusText.style.color = "red";
+                    jumpBtn.classList.remove('active');
+                    jumpBtn.disabled = true;
+                });
+            });
+
+            // 3. Enviar la señal al tocar el botón
+            // Usamos 'touchstart' para que la respuesta en móvil sea inmediata
+            jumpBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // Evita comportamientos raros en el navegador móvil
+                if (conn && conn.open) {
+                    conn.send('jump');
+                    if (navigator.vibrate) navigator.vibrate(50); // Hace vibrar el cel
+                }
+            });
+
+            // Fallback para clicks en PC si estás probando
+            jumpBtn.addEventListener('mousedown', (e) => {
+                if (conn && conn.open) conn.send('jump');
+            });
+        }
+    </script>
+</body>
+</html>
