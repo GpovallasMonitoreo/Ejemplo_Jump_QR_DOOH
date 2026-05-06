@@ -20,7 +20,7 @@
 
         .qr-section {
             width: 350px;
-            background: linear-gradient(135deg, #004d40, #009688);
+            background: linear-gradient(135deg, #d32f2f, #b71c1c); /* Rojo Mario */
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -31,8 +31,8 @@
             z-index: 10;
         }
 
-        .qr-section h1 { font-size: 28px; margin-bottom: 10px; text-transform: uppercase; }
-        .qr-section p { font-size: 14px; margin-bottom: 20px; color: #e0f2f1; }
+        .qr-section h1 { font-size: 28px; margin-bottom: 10px; text-transform: uppercase; font-weight: 900;}
+        .qr-section p { font-size: 14px; margin-bottom: 20px; color: #ffcdd2; }
         .qr-box { width: 160px; height: 160px; background: white; padding: 10px; border-radius: 15px; }
         .qr-box img { width: 100%; height: 100%; object-fit: contain; }
         
@@ -56,8 +56,8 @@
 
     <div class="dooh-container">
         <div class="qr-section">
-            <h1>Reto Mundial</h1>
-            <p>Escanea y presiona SALTAR en tu móvil</p>
+            <h1>Super Reto</h1>
+            <p>Escanea y presiona SALTAR para esquivar los obstáculos</p>
             <div class="qr-box">
                 <img id="qr-img" src="https://via.placeholder.com/150?text=Cargando+QR..." alt="QR Control">
             </div>
@@ -72,42 +72,156 @@
 
     <script>
         // ==========================================
-        // 1. LÓGICA DEL JUEGO BÁSICO (CANVAS)
+        // 1. MOTOR DEL JUEGO (ESTILO MARIO)
         // ==========================================
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        let player = { x: 100, y: 300, width: 40, height: 40, velocityY: 0, isJumping: false };
-        const gravity = 1.5;
+        
+        // Variables de físicas y estado
+        const groundY = 320; 
+        const gravity = 1.2; // Gravedad rápida (estilo Mario)
+        const jumpForce = -18; // Impulso fuerte hacia arriba
+        let gameSpeed = 6;
+        let score = 0;
+        let frameCount = 0;
+        let isGameOver = false;
+
+        let player = { 
+            x: 150, 
+            y: groundY, 
+            width: 40, 
+            height: 40, 
+            velocityY: 0, 
+            isJumping: false 
+        };
+
+        let obstacles = [];
 
         function drawPlayer() {
-            ctx.fillStyle = '#ffeb3b';
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = '#ffeb3b';
+            ctx.fillStyle = '#ff3d00'; // Color rojo Mario
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#ff3d00';
             ctx.fillRect(player.x, player.y, player.width, player.height);
             ctx.shadowBlur = 0; 
         }
 
+        function drawGround() {
+            ctx.fillStyle = '#4e342e'; // Suelo tierra
+            ctx.fillRect(0, groundY + 40, canvas.width, canvas.height - groundY);
+            ctx.fillStyle = '#4caf50'; // Pasto
+            ctx.fillRect(0, groundY + 40, canvas.width, 10);
+        }
+
+        function drawScore() {
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 30px Arial';
+            ctx.textAlign = 'right';
+            ctx.fillText(`SCORE: ${score}`, canvas.width - 30, 50);
+
+            if (isGameOver) {
+                ctx.fillStyle = '#ffeb3b';
+                ctx.font = 'bold 50px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText("¡JUEGO TERMINADO!", canvas.width / 2, canvas.height / 2);
+                ctx.font = '20px Arial';
+                ctx.fillText("Presiona SALTAR en tu móvil para reintentar", canvas.width / 2, canvas.height / 2 + 40);
+            }
+        }
+
+        function spawnObstacles() {
+            // Genera un obstáculo nuevo cada 90 frames (aprox 1.5 segundos)
+            if (frameCount % 90 === 0 && !isGameOver) {
+                // Altura aleatoria para variar un poco
+                let obsHeight = Math.random() > 0.5 ? 40 : 60; 
+                obstacles.push({
+                    x: canvas.width,
+                    y: groundY + 40 - obsHeight, // Lo apoyamos en el suelo
+                    width: 30,
+                    height: obsHeight
+                });
+            }
+        }
+
+        function updateAndDrawObstacles() {
+            for (let i = 0; i < obstacles.length; i++) {
+                let obs = obstacles[i];
+                
+                if (!isGameOver) {
+                    obs.x -= gameSpeed; // Movemos hacia la izquierda
+                }
+
+                ctx.fillStyle = '#00c853'; // Tubo verde
+                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+
+                // Detección de Colisiones (AABB - Axis-Aligned Bounding Box)
+                if (
+                    player.x < obs.x + obs.width &&
+                    player.x + player.width > obs.x &&
+                    player.y < obs.y + obs.height &&
+                    player.y + player.height > obs.y
+                ) {
+                    isGameOver = true;
+                }
+            }
+
+            // Limpiamos memoria eliminando los obstáculos que ya salieron de la pantalla
+            obstacles = obstacles.filter(obs => obs.x + obs.width > 0);
+        }
+
         function jump() {
-            if (!player.isJumping) {
-                player.velocityY = -20; 
+            if (isGameOver) {
+                // Si el juego terminó, el botón sirve para reiniciar
+                resetGame();
+            } else if (!player.isJumping) {
+                // Salto normal
+                player.velocityY = jumpForce; 
                 player.isJumping = true;
             }
         }
 
+        function resetGame() {
+            obstacles = [];
+            score = 0;
+            frameCount = 0;
+            player.y = groundY;
+            player.velocityY = 0;
+            isGameOver = false;
+        }
+
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            player.y += player.velocityY;
-            if (player.y < 300) { player.velocityY += gravity; } 
-            else { player.y = 300; player.isJumping = false; player.velocityY = 0; }
+            drawGround();
+
+            if (!isGameOver) {
+                // Aplicar gravedad
+                player.y += player.velocityY;
+                if (player.y < groundY) { 
+                    player.velocityY += gravity; 
+                } else { 
+                    player.y = groundY; 
+                    player.isJumping = false; 
+                    player.velocityY = 0; 
+                }
+
+                frameCount++;
+                // Aumentamos score lentamente
+                if (frameCount % 10 === 0) score++; 
+            }
+
+            spawnObstacles();
+            updateAndDrawObstacles();
             drawPlayer();
+            drawScore();
+
             requestAnimationFrame(gameLoop);
         }
-        gameLoop();
+        
+        gameLoop(); // Iniciamos el ciclo del juego
 
         // ==========================================
-        // 2. LÓGICA DE RED (PEERJS) CON ID FIJO Y RECONEXIÓN
+        // 2. LÓGICA DE RED (PEERJS) - INTACTA
         // ==========================================
-        const FIXED_ROOM_ID = 'gpovallas-dooh-01'; // ID Estático para asegurar la persistencia
+        const FIXED_ROOM_ID = 'gpovallas-dooh-01'; 
         const statusText = document.getElementById('status');
         const qrImg = document.getElementById('qr-img');
 
@@ -120,7 +234,6 @@
             }
         }); 
 
-        // Generar QR de inmediato basado en el ID estático
         let currentUrl = window.location.href.split('?')[0]; 
         currentUrl = currentUrl.replace('index.html', ''); 
         if (!currentUrl.endsWith('/')) currentUrl += '/';
@@ -128,14 +241,11 @@
         qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(controlUrl)}`;
 
         peer.on('open', (id) => {
-            console.log('Pantalla lista con ID: ' + id);
             statusText.innerText = "Esperando jugador...";
             statusText.style.color = "#ffeb3b";
         });
 
-        // MECANISMO DE AUTO-RECONEXIÓN SI OCURRE UN ERR_CONNECTION_CLOSED
         peer.on('disconnected', () => {
-            console.log('Se perdió conexión con el servidor (ERR_CONNECTION_CLOSED). Reconectando...');
             statusText.innerText = "Restaurando conexión...";
             peer.reconnect();
         });
@@ -159,14 +269,17 @@
         });
 
         peer.on('error', (err) => {
-            console.error("Error en PeerJS:", err);
-            // Si el ID ya está en uso (recargaste rápido), intenta reconectar
             if(err.type === 'unavailable-id') {
                 peer.reconnect();
             } else {
                 statusText.innerText = "Error: " + err.type;
                 statusText.style.color = "red";
             }
+        });
+        
+        // Fallback de teclado para probar en la PC
+        window.addEventListener('keydown', (e) => {
+            if(e.code === 'Space') jump();
         });
     </script>
 </body>
